@@ -5,7 +5,7 @@ import '../models/reminder.dart';
 
 // ── Get your FREE Groq API key at https://console.groq.com ──
 // Sign up → API Keys → Create key → paste below
-const _groqApiKey = 'YOUR_GROQ_API_KEY_HERE';
+const _groqApiKey = String.fromEnvironment('GROQ_API_KEY');
 const _groqUrl = 'https://api.groq.com/openai/v1/chat/completions';
 const _model = 'llama3-8b-8192'; // Free, fast, smart enough for Ben
 
