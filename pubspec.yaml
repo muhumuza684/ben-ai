@@ -12,7 +12,7 @@ dependencies:
 
   http: ^1.2.0
   speech_to_text: ^6.6.0
- flutter_tts: ^3.8.5
+  flutter_tts: ^3.8.5
   flutter_local_notifications: ^17.0.0
   timezone: ^0.9.4
   flutter_timezone: ^2.0.0
