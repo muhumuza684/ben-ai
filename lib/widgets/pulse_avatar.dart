@@ -3,7 +3,16 @@ import 'package:flutter/material.dart';
 class PulseAvatar extends StatefulWidget {
   final bool isActive;
   final String label;
-  const PulseAvatar({super.key, required this.isActive, required this.label});
+  final Color avatarColor;
+  final Color accentColor;
+
+  const PulseAvatar({
+    super.key,
+    required this.isActive,
+    required this.label,
+    this.avatarColor = const Color(0xFF1C1C1C),
+    this.accentColor = const Color(0xFF4ADE80),
+  });
 
   @override
   State<PulseAvatar> createState() => _PulseAvatarState();
@@ -55,7 +64,9 @@ class _PulseAvatarState extends State<PulseAvatar> with TickerProviderStateMixin
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Colors.white.withOpacity(widget.isActive ? (1 - _c2.value) * 0.18 : 0),
+                    color: widget.isActive
+                        ? widget.accentColor.withOpacity((1 - _c2.value) * 0.2)
+                        : Colors.transparent,
                     width: 1,
                   ),
                 ),
@@ -71,7 +82,9 @@ class _PulseAvatarState extends State<PulseAvatar> with TickerProviderStateMixin
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: Colors.white.withOpacity(widget.isActive ? (1 - _c1.value) * 0.28 : 0),
+                    color: widget.isActive
+                        ? widget.accentColor.withOpacity((1 - _c1.value) * 0.3)
+                        : Colors.transparent,
                     width: 1.5,
                   ),
                 ),
@@ -84,9 +97,9 @@ class _PulseAvatarState extends State<PulseAvatar> with TickerProviderStateMixin
               Container(
                 width: 96, height: 96,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1C1C1C),
+                  color: widget.avatarColor,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withOpacity(0.12), width: 2),
+                  border: Border.all(color: Colors.white.withOpacity(0.1), width: 2),
                 ),
                 child: Center(
                   child: Text(widget.label,
@@ -98,7 +111,7 @@ class _PulseAvatarState extends State<PulseAvatar> with TickerProviderStateMixin
                 child: Container(
                   width: 14, height: 14,
                   decoration: BoxDecoration(
-                    color: widget.isActive ? const Color(0xFF4ADE80) : const Color(0xFF666666),
+                    color: widget.isActive ? widget.accentColor : const Color(0xFF555555),
                     shape: BoxShape.circle,
                     border: Border.all(color: const Color(0xFF111111), width: 2.5),
                   ),

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 class WaveBars extends StatefulWidget {
   final bool active;
-  const WaveBars({super.key, required this.active});
+  final Color accentColor;
+  const WaveBars({super.key, required this.active, this.accentColor = const Color(0xFF4ADE80)});
 
   @override
   State<WaveBars> createState() => _WaveBarsState();
@@ -15,9 +16,7 @@ class _WaveBarsState extends State<WaveBars> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _controllers = List.generate(9, (i) => AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 500 + (i * 70)),
-    ));
+      vsync: this, duration: Duration(milliseconds: 500 + (i * 70))));
     if (widget.active) _startAll();
   }
 
@@ -29,9 +28,7 @@ class _WaveBarsState extends State<WaveBars> with TickerProviderStateMixin {
     }
   }
 
-  void _stopAll() {
-    for (final c in _controllers) c.animateTo(0);
-  }
+  void _stopAll() { for (final c in _controllers) c.animateTo(0); }
 
   @override
   void didUpdateWidget(WaveBars old) {
@@ -41,28 +38,25 @@ class _WaveBarsState extends State<WaveBars> with TickerProviderStateMixin {
   }
 
   @override
-  void dispose() {
-    for (final c in _controllers) c.dispose();
-    super.dispose();
-  }
+  void dispose() { for (final c in _controllers) c.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 36,
+      height: 34,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: List.generate(9, (i) => AnimatedBuilder(
           animation: _controllers[i],
           builder: (_, __) {
-            final h = widget.active ? 4.0 + (_controllers[i].value * 22) : 4.0;
+            final h = widget.active ? 4.0 + (_controllers[i].value * 20) : 4.0;
             final o = widget.active ? 0.3 + (_controllers[i].value * 0.7) : 0.2;
             return Container(
               width: 3, height: h,
               margin: const EdgeInsets.symmetric(horizontal: 2),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(o),
+                color: widget.accentColor.withOpacity(o),
                 borderRadius: BorderRadius.circular(3),
               ),
             );

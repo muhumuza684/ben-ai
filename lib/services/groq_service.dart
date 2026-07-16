@@ -2,27 +2,29 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/message.dart';
 import '../models/reminder.dart';
+import '../models/contact.dart';
 
-// ── Get your FREE Groq API key at https://console.groq.com ──
-// Sign up → API Keys → Create key → paste below
 const _groqApiKey = String.fromEnvironment('GROQ_API_KEY');
 const _groqUrl = 'https://api.groq.com/openai/v1/chat/completions';
-const _model = 'llama3-8b-8192'; // Free, fast, smart enough for Ben
+const _model = 'llama3-8b-8192';
 
 class BenResponse {
   final String text;
-  final Reminder? reminder;
-  BenResponse({required this.text, this.reminder});
+  BenResponse({required this.text});
 }
 
 class GroqService {
   static Future<BenResponse> chat({
+    required Contact contact,
     required List<Message> history,
     required String userMessage,
     required String userName,
     String? conversationSummary,
   }) async {
-    final systemPrompt = _buildSystemPrompt(userName, conversationSummary);
+    final systemPrompt = '''${contact.systemPrompt}
+
+User's name: $userName
+${conversationSummary != null && conversationSummary.isNotEmpty ? 'Recent conversation:\n$conversationSummary' : ''}''';
 
     final messages = [
       {'role': 'system', 'content': systemPrompt},
@@ -45,12 +47,11 @@ class GroqService {
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Groq error: ${response.statusCode} ${response.body}');
+      throw Exception('Groq error: ${response.statusCode}');
     }
 
     final data = jsonDecode(response.body);
     final text = data['choices'][0]['message']['content'] as String;
-
     return BenResponse(text: text.trim());
   }
 
@@ -62,10 +63,10 @@ class GroqService {
 Extract any reminder or scheduled call request from this message.
 Message: "$userMessage"
 
-If there is a reminder request, reply with ONLY this JSON (no other text):
+If there is a reminder request reply with ONLY this JSON:
 {"has_reminder":true,"task":"what to remind about","remind_at":"HH:MM"}
 
-If no reminder, reply with ONLY:
+If no reminder reply with ONLY:
 {"has_reminder":false}
 ''';
 
@@ -77,9 +78,7 @@ If no reminder, reply with ONLY:
       },
       body: jsonEncode({
         'model': _model,
-        'messages': [
-          {'role': 'user', 'content': prompt}
-        ],
+        'messages': [{'role': 'user', 'content': prompt}],
         'max_tokens': 80,
         'temperature': 0.1,
       }),
@@ -91,18 +90,14 @@ If no reminder, reply with ONLY:
       final data = jsonDecode(response.body);
       final text = (data['choices'][0]['message']['content'] as String).trim();
       final json = jsonDecode(text);
-
       if (json['has_reminder'] != true) return null;
 
-      final timeStr = json['remind_at'] as String;
-      final parts = timeStr.split(':');
+      final parts = (json['remind_at'] as String).split(':');
       final now = DateTime.now();
       var scheduledAt = DateTime(
         now.year, now.month, now.day,
         int.parse(parts[0]), int.parse(parts[1]),
       );
-
-      // If time already passed today, schedule for tomorrow
       if (scheduledAt.isBefore(now)) {
         scheduledAt = scheduledAt.add(const Duration(days: 1));
       }
@@ -117,20 +112,21 @@ If no reminder, reply with ONLY:
     }
   }
 
-  static String _buildSystemPrompt(String userName, String? summary) {
-    return '''
-You are Ben, a casual AI best friend talking to $userName on a voice call.
-
-${summary != null && summary.isNotEmpty ? 'Recent conversation:\n$summary\n' : ''}
-
-Rules:
-- Reply in 1-2 short sentences only. This is a voice call, keep it brief.
-- Talk like a real friend. Casual, warm, sometimes funny.
-- Use the person's name occasionally but not every message.
-- If they mention stress or problems, acknowledge it first.
-- If they set a reminder, confirm it warmly.
-- Never use bullet points or lists.
-- Never say you are an AI unless directly asked.
-''';
+  static String buildGreeting(Contact contact, String userName, String summary) {
+    if (summary.isNotEmpty) {
+      switch (contact.id) {
+        case 1: return "Yo $userName! Good to hear from you again. What's good?";
+        case 2: return "Hey $userName! Let's get it! What are we working on today?";
+        case 3: return "Hey $userName, I'm glad you called. How are you feeling today?";
+        case 4: return "Omg $userName! Finally! I have so much to tell you. But you first — what's up?";
+      }
+    }
+    switch (contact.id) {
+      case 1: return "Yo $userName! You called. What's good?";
+      case 2: return "Hey $userName! Mike here. Let's get this energy up — what's going on?";
+      case 3: return "Hi $userName, this is Zara. I'm here for you. What's on your mind?";
+      case 4: return "Hey $userName! Nala speaking. Okay spill — what's the tea?";
+      default: return "Hey $userName! Good to hear from you.";
+    }
   }
 }
