@@ -6,8 +6,8 @@ plugins {
 
 android {
     namespace = "com.example.ben_app"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+   compileSdk = 36
+ndkVersion = "26.1.10909125"
 
     compileOptions {
         coreLibraryDesugaringEnabled true

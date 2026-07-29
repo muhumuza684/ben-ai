@@ -25,6 +25,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isRecording = false;
   int _recordSeconds = 0;
   Timer? _recordTimer;
+  Set<String> _playingPaths = {};
 
   Contact get _c => widget.contact;
 
@@ -44,20 +45,26 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   Future<void> _load() async {
     final msgs = await DatabaseService.getChatMessages(_c.id);
     await DatabaseService.markAllRead(_c.id);
-    setState(() => _messages = msgs);
+    if (mounted) setState(() => _messages = msgs);
     _scrollToBottom();
   }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollCtrl.hasClients) {
-        _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+        _scrollCtrl.animateTo(
+          _scrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
       }
     });
   }
@@ -66,36 +73,47 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _textCtrl.text.trim();
     if (text.isEmpty) return;
     _textCtrl.clear();
+
     final userMsg = ChatMessage(contactId: _c.id, type: 'text', text: text, isMe: true);
     final id = await DatabaseService.saveChatMessage(userMsg);
     setState(() => _messages.add(ChatMessage(id: id, contactId: _c.id, type: 'text', text: text, isMe: true)));
     _scrollToBottom();
-    await _getAiReply(text);
+    await _getTextReply(text);
   }
 
-  Future<void> _getAiReply(String userText) async {
+  Future<void> _getTextReply(String userText) async {
     setState(() => _isTyping = true);
     _scrollToBottom();
     try {
       final summary = await DatabaseService.getConversationSummary(_c.id);
-      final history = _messages.where((m) => m.type == 'text')
-        .map((m) => Message(role: m.isMe ? 'user' : 'assistant', content: m.text ?? '')).toList();
-      final response = await GroqService.chat(contact: _c, history: history,
-        userMessage: userText, userName: 'Friend', conversationSummary: summary);
+      final history = _messages
+          .where((m) => m.type == 'text')
+          .map((m) => Message(role: m.isMe ? 'user' : 'assistant', content: m.text ?? ''))
+          .toList();
+      final response = await GroqService.chat(
+        contact: _c, history: history,
+        userMessage: userText, userName: 'Friend',
+        conversationSummary: summary,
+      );
       final aiMsg = ChatMessage(contactId: _c.id, type: 'text', text: response.text, isMe: false);
       final id = await DatabaseService.saveChatMessage(aiMsg);
-      setState(() {
+      if (mounted) setState(() {
         _isTyping = false;
         _messages.add(ChatMessage(id: id, contactId: _c.id, type: 'text', text: response.text, isMe: false));
       });
       _scrollToBottom();
-    } catch (e) { setState(() => _isTyping = false); }
+    } catch (e) {
+      if (mounted) setState(() => _isTyping = false);
+    }
   }
 
   Future<void> _startRecording() async {
-    final ok = await AudioService.hasPermission();
-    if (!ok) return;
-    await AudioService.startRecording();
+    final path = await AudioService.startRecording();
+    if (path == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Microphone permission needed')));
+      return;
+    }
     setState(() { _isRecording = true; _recordSeconds = 0; });
     _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() => _recordSeconds++);
@@ -105,40 +123,72 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _stopRecording() async {
     _recordTimer?.cancel();
     final path = await AudioService.stopRecording();
-    setState(() => _isRecording = false);
+    if (mounted) setState(() => _isRecording = false);
     if (path == null || _recordSeconds < 1) return;
+
     final duration = _recordSeconds;
-    final userMsg = ChatMessage(contactId: _c.id, type: 'voice', audioPath: path, audioDuration: duration, isMe: true);
+    final userMsg = ChatMessage(
+      contactId: _c.id, type: 'voice',
+      audioPath: path, audioDuration: duration, isMe: true,
+    );
     final id = await DatabaseService.saveChatMessage(userMsg);
-    setState(() => _messages.add(ChatMessage(id: id, contactId: _c.id, type: 'voice', audioPath: path, audioDuration: duration, isMe: true)));
+    setState(() => _messages.add(ChatMessage(
+      id: id, contactId: _c.id, type: 'voice',
+      audioPath: path, audioDuration: duration, isMe: true)));
     _scrollToBottom();
-    await _getAiVoiceReply();
+    await _getVoiceReply();
   }
 
-  Future<void> _getAiVoiceReply() async {
+  Future<void> _getVoiceReply() async {
     setState(() => _isTyping = true);
     try {
       final summary = await DatabaseService.getConversationSummary(_c.id);
-      final response = await GroqService.chat(contact: _c, history: [],
-        userMessage: '[User sent a voice note]', userName: 'Friend', conversationSummary: summary);
-      final aiMsg = ChatMessage(contactId: _c.id, type: 'voice',
-        audioDuration: (response.text.length / 15).round(), isMe: false, text: response.text);
+      final response = await GroqService.chat(
+        contact: _c, history: [],
+        userMessage: '[User sent a voice note. Reply naturally as if you heard them speak.]',
+        userName: 'Friend', conversationSummary: summary,
+      );
+
+      // Save AI reply as TTS voice note file
+      final ttsPath = await AudioService.saveAiVoiceNote(response.text);
+      final duration = (response.text.split(' ').length / 2.5).round();
+
+      final aiMsg = ChatMessage(
+        contactId: _c.id, type: 'voice',
+        audioPath: ttsPath, audioDuration: duration,
+        isMe: false, text: response.text,
+      );
       final id = await DatabaseService.saveChatMessage(aiMsg);
-      setState(() {
+      if (mounted) setState(() {
         _isTyping = false;
-        _messages.add(ChatMessage(id: id, contactId: _c.id, type: 'voice',
-          audioDuration: aiMsg.audioDuration, isMe: false, text: response.text));
+        _messages.add(ChatMessage(
+          id: id, contactId: _c.id, type: 'voice',
+          audioPath: ttsPath, audioDuration: duration,
+          isMe: false, text: response.text));
       });
       _scrollToBottom();
-    } catch (e) { setState(() => _isTyping = false); }
+    } catch (e) {
+      if (mounted) setState(() => _isTyping = false);
+    }
   }
 
   Future<void> _playVoice(ChatMessage msg) async {
     if (msg.isMe && msg.audioPath != null) {
-      await AudioService.playAudio(msg.audioPath!);
-    } else if (!msg.isMe && msg.text != null) {
-      await SpeechService.init();
-      await SpeechService.speak(msg.text!);
+      // Play real recorded audio
+      setState(() => _playingPaths.add(msg.audioPath!));
+      await AudioService.playFile(msg.audioPath!, onComplete: () {
+        if (mounted) setState(() => _playingPaths.remove(msg.audioPath));
+      });
+    } else if (!msg.isMe) {
+      // Play AI voice note via TTS
+      if (msg.audioPath != null) setState(() => _playingPaths.add(msg.audioPath!));
+      final text = msg.text ?? await AudioService.readAiVoiceNote(msg.audioPath ?? '');
+      if (text != null) {
+        await SpeechService.init();
+        await SpeechService.speak(text, onDone: () {
+          if (mounted && msg.audioPath != null) setState(() => _playingPaths.remove(msg.audioPath));
+        });
+      }
     }
   }
 
@@ -158,17 +208,25 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _header() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.06)))),
+      decoration: BoxDecoration(
+        color: const Color(0xFF111111),
+        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.06)))),
       child: Row(children: [
         GestureDetector(onTap: () => Navigator.pop(context),
           child: Icon(Icons.arrow_back_ios, color: Colors.white.withOpacity(0.5), size: 20)),
         const SizedBox(width: 10),
-        Container(width: 38, height: 38, decoration: BoxDecoration(color: _avatarBg, shape: BoxShape.circle),
-          child: Center(child: Text(_c.initials, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.white)))),
+        Container(width: 38, height: 38,
+          decoration: BoxDecoration(color: _avatarBg, shape: BoxShape.circle),
+          child: Center(child: Text(_c.initials,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.white)))),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(_c.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.white)),
-          Text('online', style: TextStyle(fontSize: 11, color: _accent)),
+          Row(children: [
+            Container(width: 6, height: 6, margin: const EdgeInsets.only(right: 5),
+              decoration: BoxDecoration(color: _accent, shape: BoxShape.circle)),
+            Text('online', style: TextStyle(fontSize: 11, color: _accent)),
+          ]),
         ])),
         GestureDetector(
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OutgoingScreen(contact: _c))),
@@ -191,62 +249,97 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _bubble(ChatMessage msg) {
     final isMe = msg.isMe;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start, children: [
-        if (msg.type == 'text')
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-            constraints: const BoxConstraints(maxWidth: 230),
-            decoration: BoxDecoration(
-              color: isMe ? const Color(0xFF1D4ED8) : const Color(0xFF1E1E1E),
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(16), topRight: const Radius.circular(16),
-                bottomLeft: Radius.circular(isMe ? 16 : 4), bottomRight: Radius.circular(isMe ? 4 : 16))),
-            child: Text(msg.text ?? '', style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.4)))
-        else
-          GestureDetector(onTap: () => _playVoice(msg),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          if (msg.type == 'text')
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+              constraints: const BoxConstraints(maxWidth: 240),
               decoration: BoxDecoration(
                 color: isMe ? const Color(0xFF1D4ED8) : const Color(0xFF1E1E1E),
                 borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16), topRight: const Radius.circular(16),
-                  bottomLeft: Radius.circular(isMe ? 16 : 4), bottomRight: Radius.circular(isMe ? 4 : 16))),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Container(width: 30, height: 30,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle),
-                  child: const Icon(Icons.play_arrow, color: Colors.white, size: 16)),
-                const SizedBox(width: 10),
-                Row(children: List.generate(14, (i) => Container(width: 2.5,
-                  height: (4 + (i % 5) * 3).toDouble(), margin: const EdgeInsets.symmetric(horizontal: 1),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.4), borderRadius: BorderRadius.circular(2))))),
-                const SizedBox(width: 10),
-                Text('${msg.audioDuration ?? 0}s', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6))),
-              ]))),
-        const SizedBox(height: 3),
-        Row(mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start, children: [
-          Text(msg.timeLabel, style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.25))),
-          if (isMe) ...[const SizedBox(width: 4), Icon(Icons.done_all, size: 13, color: _accent)],
+                  topLeft: const Radius.circular(18), topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(isMe ? 18 : 4),
+                  bottomRight: Radius.circular(isMe ? 4 : 18))),
+              child: Text(msg.text ?? '',
+                style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.45)))
+          else
+            _voiceBubble(msg),
+          const SizedBox(height: 3),
+          Row(
+            mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            children: [
+              Text(msg.timeLabel,
+                style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.25))),
+              if (isMe) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.done_all, size: 13, color: _accent),
+              ],
+            ]),
         ]),
-      ]),
+    );
+  }
+
+  Widget _voiceBubble(ChatMessage msg) {
+    final isMe = msg.isMe;
+    final isPlaying = msg.audioPath != null && _playingPaths.contains(msg.audioPath);
+    return GestureDetector(
+      onTap: () => _playVoice(msg),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        constraints: const BoxConstraints(maxWidth: 220),
+        decoration: BoxDecoration(
+          color: isMe ? const Color(0xFF1D4ED8) : const Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18), topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(isMe ? 18 : 4),
+            bottomRight: Radius.circular(isMe ? 4 : 18))),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 32, height: 32,
+            decoration: BoxDecoration(
+              color: isPlaying ? _accent : Colors.white.withOpacity(0.15),
+              shape: BoxShape.circle),
+            child: Icon(
+              isPlaying ? Icons.pause : Icons.play_arrow,
+              color: isPlaying ? const Color(0xFF0A1F13) : Colors.white,
+              size: 17)),
+          const SizedBox(width: 10),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: List.generate(18, (i) => Container(
+              width: 2, height: (4 + (i % 6) * 2.5).toDouble(),
+              margin: const EdgeInsets.symmetric(horizontal: 1),
+              decoration: BoxDecoration(
+                color: isPlaying
+                    ? _accent.withOpacity(0.8)
+                    : Colors.white.withOpacity(0.35),
+                borderRadius: BorderRadius.circular(2))))),
+            const SizedBox(height: 4),
+            Text('${msg.audioDuration ?? 0}s',
+              style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.5))),
+          ]),
+        ])),
     );
   }
 
   Widget _typingIndicator() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
       child: Row(children: [
-        Container(width: 28, height: 28, decoration: BoxDecoration(color: _avatarBg, shape: BoxShape.circle),
-          child: Center(child: Text(_c.initials, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white)))),
+        Container(width: 28, height: 28,
+          decoration: BoxDecoration(color: _avatarBg, shape: BoxShape.circle),
+          child: Center(child: Text(_c.initials,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white)))),
         const SizedBox(width: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: const BoxDecoration(color: Color(0xFF1E1E1E),
-            borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16),
-              bottomRight: Radius.circular(16), bottomLeft: Radius.circular(4))),
-          child: Row(mainAxisSize: MainAxisSize.min, children: List.generate(3, (i) =>
-            Container(width: 6, height: 6, margin: const EdgeInsets.symmetric(horizontal: 2),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.4), shape: BoxShape.circle))))),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(18), topRight: Radius.circular(18),
+              bottomRight: Radius.circular(18), bottomLeft: Radius.circular(4))),
+          child: Row(mainAxisSize: MainAxisSize.min,
+            children: List.generate(3, (i) => _TypingDot(delay: i * 200)))),
       ]),
     );
   }
@@ -254,54 +347,105 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _inputBar() {
     if (_isRecording) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.06)))),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF111111),
+          border: Border(top: BorderSide(color: Colors.white.withOpacity(0.06)))),
         child: Row(children: [
-          Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle)),
+          Container(width: 8, height: 8,
+            decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle)),
           const SizedBox(width: 10),
-          Text('Recording... $_recordSeconds s', style: const TextStyle(fontSize: 14, color: Colors.white)),
+          Text('Recording... ${_recordSeconds}s',
+            style: const TextStyle(fontSize: 14, color: Colors.white)),
           const Spacer(),
           GestureDetector(onTap: _stopRecording,
-            child: Container(width: 40, height: 40,
+            child: Container(width: 42, height: 42,
               decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
-              child: const Icon(Icons.stop, color: Colors.white, size: 18))),
+              child: const Icon(Icons.stop, color: Colors.white, size: 20))),
         ]),
       );
     }
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-      decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.06)))),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF111111),
+        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.06)))),
       child: Row(children: [
         Expanded(child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(22), border: Border.all(color: Colors.white.withOpacity(0.08))),
-          child: TextField(controller: _textCtrl,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withOpacity(0.08))),
+          child: TextField(
+            controller: _textCtrl,
             style: const TextStyle(color: Colors.white, fontSize: 14),
-            decoration: InputDecoration(hintText: 'Message ${_c.name}...',
+            maxLines: null,
+            decoration: InputDecoration(
+              hintText: 'Message ${_c.name}...',
               hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14),
               isDense: true, border: InputBorder.none),
             onSubmitted: (_) => _sendText()))),
         const SizedBox(width: 8),
-        ValueListenableBuilder(valueListenable: _textCtrl, builder: (_, value, __) {
-          if (value.text.isNotEmpty) {
+        ValueListenableBuilder(valueListenable: _textCtrl, builder: (_, val, __) {
+          if (val.text.isNotEmpty) {
             return GestureDetector(onTap: _sendText,
-              child: Container(width: 40, height: 40,
+              child: Container(width: 42, height: 42,
                 decoration: BoxDecoration(color: _accent, shape: BoxShape.circle),
-                child: const Icon(Icons.send, color: Color(0xFF0A1F13), size: 18)));
+                child: const Icon(Icons.send_rounded, color: Color(0xFF0A1F13), size: 19)));
           }
           return GestureDetector(
-            onTapDown: (_) => _startRecording(),
-            onTapUp: (_) => _stopRecording(),
-            child: Container(width: 40, height: 40,
+            onLongPressStart: (_) => _startRecording(),
+            onLongPressEnd: (_) => _stopRecording(),
+            child: Container(width: 42, height: 42,
               decoration: BoxDecoration(color: _accent, shape: BoxShape.circle),
-              child: const Icon(Icons.mic, color: Color(0xFF0A1F13), size: 18)));
+              child: const Icon(Icons.mic, color: Color(0xFF0A1F13), size: 20)));
         }),
       ]),
     );
   }
 
   @override
-  void dispose() { _textCtrl.dispose(); _scrollCtrl.dispose(); _recordTimer?.cancel(); super.dispose(); }
+  void dispose() {
+    _textCtrl.dispose();
+    _scrollCtrl.dispose();
+    _recordTimer?.cancel();
+    super.dispose();
+  }
+}
+
+class _TypingDot extends StatefulWidget {
+  final int delay;
+  const _TypingDot({required this.delay});
+
+  @override
+  State<_TypingDot> createState() => _TypingDotState();
+}
+
+class _TypingDotState extends State<_TypingDot> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _anim = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+    Future.delayed(Duration(milliseconds: widget.delay), () {
+      if (mounted) _ctrl.repeat(reverse: true);
+    });
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(animation: _anim, builder: (_, __) =>
+      Container(width: 6, height: 6, margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.3 + _anim.value * 0.5),
+          shape: BoxShape.circle)));
+  }
 }
