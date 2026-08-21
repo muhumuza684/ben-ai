@@ -32,8 +32,23 @@ class SpeechService {
 
   static Future<void> _configureTts({String voiceStyle = 'warm'}) async {
     await _tts.setLanguage(_languageCode);
-    await _tts.setPitch(voiceStyle == 'bright' ? 1.08 : voiceStyle == 'deep' ? 0.78 : 0.92);
-    await _tts.setSpeechRate(0.46);
+    const voiceProfiles = <String, List<double>>{
+      'warm_companion': [0.92, 0.46],
+      'bright_and_playful': [1.08, 0.53],
+      'calm_and_deep': [0.78, 0.40],
+      'soft_storyteller': [0.98, 0.40],
+      'energetic_friend': [1.04, 0.58],
+      'gentle_listener': [1.00, 0.41],
+      'confident_guide': [0.88, 0.49],
+      'cheerful_comedian': [1.10, 0.56],
+      'low_and_soothing': [0.72, 0.38],
+      'clear_professional': [0.90, 0.50],
+      'soulful_and_expressive': [0.96, 0.44],
+      'melodic_and_light': [1.12, 0.48],
+    };
+    final profile = voiceProfiles[voiceStyle] ?? const [0.92, 0.46];
+    await _tts.setPitch(profile[0]);
+    await _tts.setSpeechRate(profile[1]);
     await _tts.setVolume(1.0);
 
     final voices = await _tts.getVoices;

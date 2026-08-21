@@ -61,12 +61,19 @@ ${conversationSummary != null && conversationSummary.isNotEmpty ? 'Recent conver
     required String userMessage,
     required String conversationSummary,
   }) async {
+    // Keep the core scheduling promise deterministic. The AI parser is useful
+    // for nuanced requests, but common phrases must work even if the network
+    // or API key is unavailable.
+    final local = _parseLocalReminder(userMessage, conversationSummary);
+    if (local != null) return local;
+
     final prompt = '''
 Extract any reminder or scheduled call request from this message.
 Message: "$userMessage"
+Current local date and time: ${DateTime.now().toIso8601String()}
 
 If there is a reminder request reply with ONLY this JSON:
-{"has_reminder":true,"task":"what to remind about","remind_at":"HH:MM"}
+{"has_reminder":true,"task":"what to remind about","scheduled_at":"ISO-8601 local datetime"}
 
 If no reminder reply with ONLY:
 {"has_reminder":false}
@@ -94,24 +101,51 @@ If no reminder reply with ONLY:
       final json = jsonDecode(text);
       if (json['has_reminder'] != true) return null;
 
-      final parts = (json['remind_at'] as String).split(':');
       final now = DateTime.now();
-      var scheduledAt = DateTime(
-        now.year, now.month, now.day,
-        int.parse(parts[0]), int.parse(parts[1]),
-      );
-      if (scheduledAt.isBefore(now)) {
-        scheduledAt = scheduledAt.add(const Duration(days: 1));
+      final rawDate = json['scheduled_at']?.toString();
+      DateTime scheduledAt;
+      if (rawDate != null && rawDate.isNotEmpty) {
+        scheduledAt = DateTime.parse(rawDate).toLocal();
+      } else {
+        final parts = (json['remind_at'] as String).split(':');
+        scheduledAt = DateTime(now.year, now.month, now.day, int.parse(parts[0]), int.parse(parts[1]));
       }
+      if (scheduledAt.isBefore(now)) scheduledAt = scheduledAt.add(const Duration(days: 1));
 
-      return Reminder(
-        task: json['task'] as String,
-        scheduledAt: scheduledAt,
-        lastConversationSummary: conversationSummary,
-      );
+      return Reminder(task: json['task'] as String, scheduledAt: scheduledAt, lastConversationSummary: conversationSummary);
     } catch (_) {
       return null;
     }
+  }
+
+  static Reminder? _parseLocalReminder(String message, String summary) {
+    final lower = message.toLowerCase();
+    final looksScheduled = lower.contains('call me') || lower.contains('remind me') || lower.contains('ring me') || lower.contains('schedule');
+    if (!looksScheduled) return null;
+    final now = DateTime.now();
+    DateTime? when;
+    final inMatch = RegExp(r'\bin\s+(\d+)\s+minutes?\b').firstMatch(lower);
+    if (inMatch != null) {
+      when = now.add(Duration(minutes: int.parse(inMatch.group(1)!)));
+    } else {
+      final timeMatch = RegExp(r'\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?', caseSensitive: false).firstMatch(lower);
+      if (timeMatch != null) {
+        var hour = int.parse(timeMatch.group(1)!);
+        final minute = int.tryParse(timeMatch.group(2) ?? '0') ?? 0;
+        final meridiem = timeMatch.group(3);
+        if (meridiem == 'pm' && hour < 12) hour += 12;
+        if (meridiem == 'am' && hour == 12) hour = 0;
+        when = DateTime(now.year, now.month, now.day, hour, minute);
+        if (lower.contains('tomorrow')) when = when.add(const Duration(days: 1));
+        if (when.isBefore(now)) when = when.add(const Duration(days: 1));
+      }
+    }
+    if (when == null) return null;
+    final task = message
+        .replaceAll(RegExp(r'\b(call me|remind me|ring me|schedule|tomorrow|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?|in\s+\d+\s+minutes?)\b', caseSensitive: false), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return Reminder(task: task.isEmpty ? 'Your scheduled conversation' : task, scheduledAt: when, lastConversationSummary: summary);
   }
 
   static String _languageName(String code) {

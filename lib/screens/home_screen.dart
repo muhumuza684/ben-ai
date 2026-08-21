@@ -84,11 +84,16 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 20),
 
+              Text('BRYTMA TECH UGANDA', style: TextStyle(fontSize: 10, color: const Color(0xFF4ADE80).withOpacity(0.8), letterSpacing: 2.2, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 14),
               const Text('Ben',
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: -0.5)),
-              const SizedBox(height: 6),
-              Text('Your AI friend. Always here.',
-                style: TextStyle(fontSize: 15, color: Colors.white.withOpacity(0.4))),
+                style: TextStyle(fontSize: 38, fontWeight: FontWeight.w600, color: Colors.white, letterSpacing: -1.0)),
+              const SizedBox(height: 8),
+              Text('A phone that feels like a person.',
+                style: TextStyle(fontSize: 17, color: Colors.white.withOpacity(0.78), fontWeight: FontWeight.w500)),
+              const SizedBox(height: 7),
+              Text('Talk, chat, schedule a call, and keep your favorite conversations close.', textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, height: 1.4, color: Colors.white.withOpacity(0.4))),
 
               const Spacer(flex: 2),
 
@@ -138,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       Icon(Icons.call, color: Color(0xFF0A1F13), size: 22),
                       SizedBox(width: 10),
-                      Text('Call Ben',
+                      Text('Enter Ben',
                         style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500, color: Color(0xFF0A1F13))),
                     ],
                   ),
@@ -161,7 +166,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const Spacer(),
 
-              Text('Built by BrytMa Tech Uganda',
+              Text('Powered by BrytMa Tech Uganda',
                 style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.2))),
               const SizedBox(height: 16),
             ],

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:timezone/data/latest.dart' as tz;
-import 'screens/contacts_screen.dart';
+import 'screens/home_screen.dart';
 import 'services/notification_service.dart';
 import 'services/database_service.dart';
 import 'services/simulated_call_service.dart';
+import 'services/appearance_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +17,7 @@ void main() async {
   tz.initializeTimeZones();
   await NotificationService.init();
   await DatabaseService.init();
+  await AppearanceService.init();
   await SimulatedCallService.init();
   runApp(const BenApp());
 }
@@ -37,7 +39,7 @@ class BenApp extends StatelessWidget {
           surface: Color(0xFF1A1A1A),
         ),
       ),
-      home: const ContactsScreen(),
+      home: const HomeScreen(),
     );
   }
 }

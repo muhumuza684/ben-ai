@@ -5,8 +5,10 @@ import '../models/chat_message.dart';
 import '../models/message.dart';
 import '../services/database_service.dart';
 import '../services/groq_service.dart';
+import '../services/web_search_service.dart';
 import '../services/audio_service.dart';
 import '../services/speech_service.dart';
+import '../services/appearance_service.dart';
 import 'outgoing_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -85,6 +87,17 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _isTyping = true);
     _scrollToBottom();
     try {
+      final normalized = userText.trim();
+      if (normalized.toLowerCase().startsWith('search ') || normalized.toLowerCase().startsWith('/search ')) {
+        final query = normalized.replaceFirst(RegExp(r'^/?search\s+', caseSensitive: false), '');
+        final results = await WebSearchService.search(query);
+        final text = results.isEmpty ? 'I could not find a clear result for "$query".' : results.take(3).map((r) => '${r.title}: ${r.snippet}').join('\n\n');
+        final aiMsg = ChatMessage(contactId: _c.id, type: 'text', text: text, isMe: false);
+        final id = await DatabaseService.saveChatMessage(aiMsg);
+        if (mounted) setState(() { _isTyping = false; _messages.add(ChatMessage(id: id, contactId: _c.id, type: 'text', text: text, isMe: false)); });
+        _scrollToBottom();
+        return;
+      }
       final summary = await DatabaseService.getConversationSummary(_c.id);
       final history = _messages
           .where((m) => m.type == 'text')
@@ -195,7 +208,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F0F),
+      backgroundColor: AppearanceService.color,
       body: SafeArea(child: Column(children: [
         _header(),
         Expanded(child: _messageList()),

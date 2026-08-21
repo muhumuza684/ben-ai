@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/contact.dart';
 import '../services/database_service.dart';
+import '../services/appearance_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final List<Contact> contacts;
@@ -12,11 +13,18 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late List<Contact> _contacts;
+  String _background = AppearanceService.background;
 
   @override
   void initState() {
     super.initState();
     _contacts = List.from(widget.contacts);
+    _background = AppearanceService.background;
+  }
+
+  Future<void> _changeBackground(String value) async {
+    await AppearanceService.setBackground(value);
+    if (mounted) setState(() => _background = value);
   }
 
   void _editContact(Contact contact) {
@@ -180,6 +188,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Color _backgroundColor(String value) {
+    switch (value) {
+      case 'forest': return const Color(0xFF0B1B16);
+      case 'ocean': return const Color(0xFF0B1422);
+      case 'plum': return const Color(0xFF1A101D);
+      default: return const Color(0xFF0F0F0F);
+    }
+  }
+
   Color _accentColor(int id) {
     switch (id) {
       case 1: return const Color(0xFF4ADE80);
@@ -216,6 +233,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
+            ),
+
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.04), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.07))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Conversation background', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 10),
+                Row(children: AppearanceService.options.entries.map((entry) => Expanded(child: GestureDetector(onTap: () => _changeBackground(entry.key), child: Column(children: [
+                  Container(height: 30, margin: const EdgeInsets.symmetric(horizontal: 3), decoration: BoxDecoration(color: _backgroundColor(entry.key), borderRadius: BorderRadius.circular(8), border: Border.all(color: _background == entry.key ? const Color(0xFF4ADE80) : Colors.transparent, width: 2))),
+                  const SizedBox(height: 4), Text(entry.value, textAlign: TextAlign.center, style: TextStyle(color: Colors.white38, fontSize: 9)),
+                ])))).toList()),
+              ]),
             ),
 
             Expanded(

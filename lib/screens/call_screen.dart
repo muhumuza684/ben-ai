@@ -8,6 +8,7 @@ import '../services/speech_service.dart';
 import '../services/database_service.dart';
 import '../services/notification_service.dart';
 import '../services/simulated_call_service.dart';
+import '../services/appearance_service.dart';
 import '../widgets/wave_bars.dart';
 import '../widgets/pulse_avatar.dart';
 
@@ -82,7 +83,7 @@ class _CallScreenState extends State<CallScreen> {
       if (mounted) {
         setState(() {
           _state = CallState.idle;
-          _statusText = 'Listening for you...';
+          _statusText = 'Your turn';
           Future.delayed(const Duration(milliseconds: 250), () {
             if (mounted && _state == CallState.idle) _startListening();
           });
@@ -96,7 +97,7 @@ class _CallScreenState extends State<CallScreen> {
     await SpeechService.stopSpeaking();
     setState(() {
       _state = CallState.listening;
-      _statusText = 'Listening...';
+      _statusText = 'Your turn';
       _partialText = '';
       _finalTranscript = '';
     });
@@ -108,7 +109,7 @@ class _CallScreenState extends State<CallScreen> {
       onDone: () {
         final text = _finalTranscript.trim();
         if (text.isEmpty) {
-          if (mounted) setState(() { _state = CallState.idle; _statusText = 'I’m listening — tap the mic when ready'; });
+          if (mounted) setState(() { _state = CallState.idle; _statusText = 'Your turn'; });
           return;
         }
         _handleUserMessage(text);
@@ -174,7 +175,7 @@ class _CallScreenState extends State<CallScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF111111),
+      backgroundColor: AppearanceService.color,
       body: Stack(children: [
         Positioned.fill(child: Center(child: Text(_c.initials,
           style: TextStyle(fontSize: 270, fontWeight: FontWeight.w500, color: Colors.white.withOpacity(0.04))))),
@@ -190,14 +191,11 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Widget _statusBar() {
-    final now = DateTime.now();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text('${now.hour}:${now.minute.toString().padLeft(2,'0')}',
-          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
             color: _accent.withOpacity(0.12),
             borderRadius: BorderRadius.circular(20),
@@ -206,14 +204,9 @@ class _CallScreenState extends State<CallScreen> {
           child: Row(children: [
             Container(width: 6, height: 6, decoration: BoxDecoration(color: _accent, shape: BoxShape.circle)),
             const SizedBox(width: 6),
-            const Text('SIMULATED LIVE', style: TextStyle(color: Colors.white70, fontSize: 9, letterSpacing: 1.1)),
+            const Text('LIVE IN BEN', style: TextStyle(color: Colors.white70, fontSize: 9, letterSpacing: 1.1)),
           ]),
         ),
-        const Row(children: [
-          Icon(Icons.wifi, color: Colors.white, size: 16),
-          SizedBox(width: 6),
-          Icon(Icons.battery_5_bar, color: Colors.white, size: 16),
-        ]),
       ]),
     );
   }
@@ -237,7 +230,6 @@ class _CallScreenState extends State<CallScreen> {
       Text(_state == CallState.ended ? '—' : _timerLabel,
         style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.22))),
       const SizedBox(height: 18),
-      WaveBars(active: _state == CallState.contactSpeaking, accentColor: _accent),
       if (_partialText.isNotEmpty)
         Padding(padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 8),
           child: Text(_partialText, textAlign: TextAlign.center,
@@ -301,57 +293,21 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Widget _controls() {
-    final isListening = _state == CallState.listening;
     return Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
       child: Column(children: [
-        // Hint text
-        Text(
-          _state == CallState.idle ? 'Your turn — tap the mic when you are ready' :
-          _state == CallState.listening ? 'Listening until you finish speaking' :
-          _state == CallState.thinking ? '${_c.name} is thinking...' :
-          _state == CallState.contactSpeaking ? '${_c.name} is speaking...' : '',
-          style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.3))),
-        const SizedBox(height: 12),
-
-        Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, crossAxisAlignment: CrossAxisAlignment.center, children: [
-          // Mute
-          GestureDetector(onTap: () => setState(() => _muted = !_muted),
-            child: Container(width: 52, height: 52,
-              decoration: BoxDecoration(
-                color: _muted ? const Color(0xFF3A1A1A) : Colors.white.withOpacity(0.1),
-                shape: BoxShape.circle),
-              child: Icon(_muted ? Icons.mic_off : Icons.mic,
-                color: _muted ? const Color(0xFFF87171) : Colors.white, size: 20))),
-
-          // Main mic button — tap to start/stop
-          GestureDetector(
-            onTap: isListening ? _stopListening : _startListening,
-            child: Container(width: 70, height: 70,
-              decoration: BoxDecoration(
-                color: _state == CallState.ended ? const Color(0xFF333333)
-                    : isListening ? _accent.withOpacity(0.8) : _accent,
-                shape: BoxShape.circle,
-                boxShadow: isListening ? [BoxShadow(color: _accent.withOpacity(0.4), blurRadius: 16, spreadRadius: 2)] : null),
-              child: Icon(
-                isListening ? Icons.stop : Icons.mic,
-                color: _state == CallState.ended ? Colors.white38 : const Color(0xFF0A1F13),
-                size: 28))),
-
-          // Speaker
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           GestureDetector(onTap: () {},
-            child: Container(width: 52, height: 52,
+            child: Container(width: 54, height: 54,
               decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
-              child: const Icon(Icons.volume_up, color: Colors.white, size: 20))),
+              child: const Icon(Icons.volume_up, color: Colors.white, size: 21))),
         ]),
         const SizedBox(height: 18),
-
-        // End call
         GestureDetector(onTap: _endCall,
-          child: Container(width: 60, height: 60,
+          child: Container(width: 64, height: 64,
             decoration: BoxDecoration(
               color: _state == CallState.ended ? const Color(0xFF333333) : const Color(0xFFEF4444),
               shape: BoxShape.circle),
-            child: const Icon(Icons.call_end, color: Colors.white, size: 26))),
+            child: const Icon(Icons.call_end, color: Colors.white, size: 28))),
       ]));
   }
 

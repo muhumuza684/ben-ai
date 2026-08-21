@@ -1,7 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/contact.dart';
 import '../services/database_service.dart';
+import '../models/reminder.dart';
+import '../services/notification_service.dart';
+import '../services/simulated_call_service.dart';
 import 'outgoing_screen.dart';
+import 'add_contact_screen.dart';
+import 'chat_screen.dart';
 import 'settings_screen.dart';
 import 'call_history_screen.dart';
 
@@ -15,6 +21,7 @@ class ContactsScreen extends StatefulWidget {
 class _ContactsScreenState extends State<ContactsScreen> {
   List<Contact> _contacts = [];
   int _tab = 0;
+  String _query = '';
 
   @override
   void initState() {
@@ -68,13 +75,17 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.35))),
             ],
           ),
-          GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => SettingsScreen(contacts: _contacts)),
-            ).then((_) => _load()),
-            child: Icon(Icons.settings_outlined, color: Colors.white.withOpacity(0.3), size: 22),
-          ),
+          Row(children: [
+            GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddContactScreen(onAdded: _load))).then((_) => _load()),
+              child: Container(width: 38, height: 38, decoration: BoxDecoration(color: const Color(0xFF4ADE80).withOpacity(0.12), shape: BoxShape.circle), child: const Icon(Icons.person_add_alt_1, color: Color(0xFF4ADE80), size: 19)),
+            ),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => SettingsScreen(contacts: _contacts))).then((_) => _load()),
+              child: Icon(Icons.settings_outlined, color: Colors.white.withOpacity(0.3), size: 22),
+            ),
+          ]),
         ],
       ),
     );
@@ -93,7 +104,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
         children: [
           Icon(Icons.search, color: Colors.white.withOpacity(0.25), size: 16),
           const SizedBox(width: 8),
-          Text('Search friends...', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.3))),
+          Expanded(child: TextField(onChanged: (value) => setState(() => _query = value), style: const TextStyle(color: Colors.white, fontSize: 13), decoration: InputDecoration(hintText: 'Search friends...', hintStyle: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.3)), border: InputBorder.none, isDense: true))),
         ],
       ),
     );
@@ -103,17 +114,54 @@ class _ContactsScreenState extends State<ContactsScreen> {
     if (_contacts.isEmpty) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
     }
+    final visible = _contacts.where((c) => _query.trim().isEmpty || c.name.toLowerCase().contains(_query.toLowerCase()) || c.specialty.toLowerCase().contains(_query.toLowerCase())).toList();
     return ListView.separated(
-      itemCount: _contacts.length,
+      itemCount: visible.length,
       separatorBuilder: (_, __) => Divider(height: 0, color: Colors.white.withOpacity(0.06), indent: 16, endIndent: 16),
-      itemBuilder: (_, i) => _contactTile(_contacts[i]),
+      itemBuilder: (_, i) => _contactTile(visible[i]),
     );
   }
+
+  Future<void> _scheduleCall(Contact contact) async {
+    final today = DateTime.now();
+    final date = await showDatePicker(context: context, firstDate: today, lastDate: today.add(const Duration(days: 365)), initialDate: today, builder: (_, child) => Theme(data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: Color(0xFF4ADE80))), child: child!));
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(context: context, initialTime: TimeOfDay.now(), builder: (_, child) => Theme(data: ThemeData.dark().copyWith(colorScheme: const ColorScheme.dark(primary: Color(0xFF4ADE80))), child: child!));
+    if (time == null || !mounted) return;
+    final scheduledAt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    if (!scheduledAt.isAfter(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Choose a future time for the call')));
+      return;
+    }
+    final reminder = Reminder(contactId: contact.id, task: 'A scheduled check-in with ${contact.name}', scheduledAt: scheduledAt);
+    final id = await DatabaseService.saveReminder(reminder, contact.id);
+    final saved = Reminder(id: id, contactId: contact.id, task: reminder.task, scheduledAt: scheduledAt);
+    SimulatedCallService.schedule(saved, contact);
+    await NotificationService.scheduleReminderCall(saved);
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${contact.name} will call at ${time.format(context)}')));
+  }
+
+  void _openContactActions(Contact contact) {
+    showModalBottomSheet(context: context, backgroundColor: const Color(0xFF1A1A1A), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(26))), builder: (_) => SafeArea(child: Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 24), child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Text(contact.name, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 4), const Text('Choose how you want to connect', style: TextStyle(color: Colors.white54, fontSize: 12)),
+      const SizedBox(height: 18),
+      Row(children: [
+        Expanded(child: _actionCard(Icons.call_outlined, 'Call', () { Navigator.pop(context); _callContact(contact); })),
+        const SizedBox(width: 8),
+        Expanded(child: _actionCard(Icons.chat_bubble_outline, 'Chat', () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(contact: contact))); })),
+        const SizedBox(width: 8),
+        Expanded(child: _actionCard(Icons.schedule_outlined, 'Schedule', () { Navigator.pop(context); _scheduleCall(contact); })),
+      ]),
+    ]))));
+  }
+
+  Widget _actionCard(IconData icon, String label, VoidCallback onTap) => GestureDetector(onTap: onTap, child: Container(padding: const EdgeInsets.symmetric(vertical: 18), decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.08))), child: Column(children: [Icon(icon, color: const Color(0xFF4ADE80), size: 26), const SizedBox(height: 8), Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600))])));
 
   Widget _contactTile(Contact contact) {
     final accent = _accentColor(contact.id);
     return InkWell(
-      onTap: () => _callContact(contact),
+      onTap: () => _openContactActions(contact),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
@@ -126,10 +174,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     color: _parseColor(contact.avatarColor),
                     shape: BoxShape.circle,
                   ),
-                  child: Center(
-                    child: Text(contact.initials,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.white)),
-                  ),
+                  child: contact.photoPath != null ? ClipOval(child: Image.file(File(contact.photoPath!), fit: BoxFit.cover)) : Center(child: Text(contact.initials, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: Colors.white))),
                 ),
                 Positioned(
                   bottom: 1, right: 1,
@@ -161,7 +206,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
               ),
             ),
             GestureDetector(
-              onTap: () => _callContact(contact),
+              onTap: () => _openContactActions(contact),
               child: Container(
                 width: 38, height: 38,
                 decoration: BoxDecoration(

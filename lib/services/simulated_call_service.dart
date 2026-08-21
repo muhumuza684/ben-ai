@@ -26,8 +26,10 @@ class SimulatedCallService {
     final id = reminder.id ?? reminder.scheduledAt.millisecondsSinceEpoch;
     _timers[id]?.cancel();
     final delay = reminder.scheduledAt.difference(DateTime.now());
-    if (delay.isNegative) return;
-    _timers[id] = Timer(delay, () async {
+    // If the OS suspended Ben past the scheduled moment, recover the call
+    // immediately instead of silently dropping it.
+    final effectiveDelay = delay.isNegative ? Duration.zero : delay;
+    _timers[id] = Timer(effectiveDelay, () async {
       await DatabaseService.markReminderFired(id);
       _timers.remove(id);
       _showIncomingCall(contact, reminder.task);
@@ -39,6 +41,8 @@ class SimulatedCallService {
     if (reminder == null || reminder.contactId == null) return;
     final contact = await DatabaseService.getContact(reminder.contactId!);
     if (contact == null) return;
+    await DatabaseService.markReminderFired(reminderId);
+    cancel(reminderId);
     _showIncomingCall(contact, reminder.task);
   }
 
