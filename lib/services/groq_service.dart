@@ -23,6 +23,8 @@ class GroqService {
   }) async {
     final systemPrompt = '''${contact.systemPrompt}
 
+Language: ${_languageName(contact.languageCode)} (${contact.languageCode}). Always reply in this language unless the user explicitly switches languages.
+Phone-call rules: wait for the user's complete utterance, answer naturally in 1-2 short spoken sentences, and do not narrate internal reasoning.
 User's name: $userName
 ${conversationSummary != null && conversationSummary.isNotEmpty ? 'Recent conversation:\n$conversationSummary' : ''}''';
 
@@ -112,7 +114,27 @@ If no reminder reply with ONLY:
     }
   }
 
+  static String _languageName(String code) {
+    switch (code) {
+      case 'fr-FR': return 'French';
+      case 'es-ES': return 'Spanish';
+      case 'zh-CN': return 'Mandarin Chinese';
+      case 'de-DE': return 'German';
+      case 'sw-KE': return 'Swahili';
+      default: return 'English';
+    }
+  }
+
   static String buildGreeting(Contact contact, String userName, String summary) {
+    if (contact.languageCode != 'en-US') {
+      switch (contact.languageCode) {
+        case 'fr-FR': return 'Salut $userName, je suis ${contact.name}. Comment vas-tu ?';
+        case 'es-ES': return 'Hola $userName, soy ${contact.name}. ¿Cómo estás?';
+        case 'zh-CN': return '嗨，$userName，我是${contact.name}。最近怎么样？';
+        case 'de-DE': return 'Hey $userName, hier ist ${contact.name}. Wie geht es dir?';
+        case 'sw-KE': return 'Habari $userName, ni ${contact.name}. Ukoje leo?';
+      }
+    }
     if (summary.isNotEmpty) {
       switch (contact.id) {
         case 1: return "Yo $userName! Good to hear from you again. What's good?";

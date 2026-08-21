@@ -8,6 +8,10 @@ class Contact {
   String avatarColor; // hex color string
   String? photoPath; // local file path if user set a photo
   String systemPrompt; // AI personality prompt
+  String languageCode; // e.g. en-US, fr-FR, sw-KE
+  String voiceStyle; // distinct built-in voice style
+  String? voiceProfilePath; // optional authorized voice-profile recording
+  bool voiceConsent; // explicit consent for a custom voice profile
   DateTime? lastCalledAt;
 
   Contact({
@@ -17,6 +21,10 @@ class Contact {
     required this.gender,
     required this.avatarColor,
     required this.systemPrompt,
+    this.languageCode = 'en-US',
+    this.voiceStyle = 'warm',
+    this.voiceProfilePath,
+    this.voiceConsent = false,
     this.photoPath,
     this.lastCalledAt,
   });
@@ -102,6 +110,10 @@ You are great at fun conversations, jokes, gossip, and entertainment.''',
     'avatar_color': avatarColor,
     'photo_path': photoPath,
     'system_prompt': systemPrompt,
+    'language_code': languageCode,
+    'voice_style': voiceStyle,
+    'voice_profile_path': voiceProfilePath,
+    'voice_consent': voiceConsent ? 1 : 0,
     'last_called_at': lastCalledAt?.toIso8601String(),
   };
 
@@ -112,6 +124,10 @@ You are great at fun conversations, jokes, gossip, and entertainment.''',
     gender: m['gender'],
     avatarColor: m['avatar_color'],
     systemPrompt: m['system_prompt'],
+    languageCode: m['language_code'] as String? ?? 'en-US',
+    voiceStyle: m['voice_style'] as String? ?? 'warm',
+    voiceProfilePath: m['voice_profile_path'] as String?,
+    voiceConsent: (m['voice_consent'] as int? ?? 0) == 1,
     photoPath: m['photo_path'],
     lastCalledAt: m['last_called_at'] != null
         ? DateTime.parse(m['last_called_at'])

@@ -26,6 +26,7 @@ class _CallScreenState extends State<CallScreen> {
   CallState _state = CallState.idle;
   bool _muted = false;
   String _partialText = '';
+  String _finalTranscript = '';
   String _statusText = 'Ben is about to pick up...';
   List<Message> _messages = [];
   Reminder? _pendingReminder;
@@ -54,6 +55,7 @@ class _CallScreenState extends State<CallScreen> {
 
   Future<void> _init() async {
     await SpeechService.init();
+    await SpeechService.setLanguage(_c.languageCode);
     final msgs = await DatabaseService.getRecentMessages(_c.id, limit: 10);
     setState(() => _messages = msgs);
     _callTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -76,7 +78,7 @@ class _CallScreenState extends State<CallScreen> {
       _state = CallState.contactSpeaking;
       _statusText = '${_c.name} is talking...';
     });
-    SpeechService.speak(text, onDone: () {
+    SpeechService.speak(text, voiceStyle: _c.voiceStyle, onDone: () {
       if (mounted) {
         setState(() {
           _state = CallState.idle;
@@ -96,12 +98,17 @@ class _CallScreenState extends State<CallScreen> {
       _state = CallState.listening;
       _statusText = 'Listening...';
       _partialText = '';
+      _finalTranscript = '';
     });
     await SpeechService.startListening(
       onPartial: (p) { if (mounted) setState(() => _partialText = p); },
       onResult: (text) {
-        if (text.trim().isEmpty) {
-          if (mounted) setState(() { _state = CallState.idle; _statusText = 'Tap mic to talk'; });
+        if (text.trim().isNotEmpty) _finalTranscript = text.trim();
+      },
+      onDone: () {
+        final text = _finalTranscript.trim();
+        if (text.isEmpty) {
+          if (mounted) setState(() { _state = CallState.idle; _statusText = 'I’m listening — tap the mic when ready'; });
           return;
         }
         _handleUserMessage(text);
@@ -145,7 +152,7 @@ class _CallScreenState extends State<CallScreen> {
       }
       _contactSpeak(response.text);
     } catch (e) {
-      _contactSpeak("Sorry, lost you for a sec. Say that again?");
+      _contactSpeak("Sorry, I missed that. Take your time and say it again when you're ready.");
     }
   }
 
@@ -184,22 +191,37 @@ class _CallScreenState extends State<CallScreen> {
 
   Widget _statusBar() {
     final now = DateTime.now();
-    return Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text('${now.hour}:${now.minute.toString().padLeft(2,'0')}',
           style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: _accent.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _accent.withOpacity(0.28)),
+          ),
+          child: Row(children: [
+            Container(width: 6, height: 6, decoration: BoxDecoration(color: _accent, shape: BoxShape.circle)),
+            const SizedBox(width: 6),
+            const Text('SIMULATED LIVE', style: TextStyle(color: Colors.white70, fontSize: 9, letterSpacing: 1.1)),
+          ]),
+        ),
         const Row(children: [
           Icon(Icons.wifi, color: Colors.white, size: 16),
           SizedBox(width: 6),
           Icon(Icons.battery_5_bar, color: Colors.white, size: 16),
         ]),
-      ]));
+      ]),
+    );
   }
 
   Widget _center() {
     return Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Text(_c.specialty.toLowerCase(),
-        style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.3), letterSpacing: 1.2)),
+      Text('${_c.specialty.toLowerCase()}  •  ${SpeechService.supportedLanguages[_c.languageCode] ?? 'English'}',
+        style: TextStyle(fontSize: 10, color: _accent.withOpacity(0.75), letterSpacing: 1.1)),
       const SizedBox(height: 20),
       PulseAvatar(
         isActive: _state == CallState.contactSpeaking || _state == CallState.listening,
@@ -207,7 +229,10 @@ class _CallScreenState extends State<CallScreen> {
       const SizedBox(height: 16),
       Text(_c.name, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: -0.5)),
       const SizedBox(height: 5),
-      Text(_statusText, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.45))),
+      AnimatedSwitcher(
+        duration: const Duration(milliseconds: 180),
+        child: Text(_statusText, key: ValueKey(_statusText), style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.6))),
+      ),
       const SizedBox(height: 3),
       Text(_state == CallState.ended ? '—' : _timerLabel,
         style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.22))),
@@ -281,8 +306,8 @@ class _CallScreenState extends State<CallScreen> {
       child: Column(children: [
         // Hint text
         Text(
-          _state == CallState.idle ? 'Tap mic to speak' :
-          _state == CallState.listening ? 'Listening... tap again to stop' :
+          _state == CallState.idle ? 'Your turn — tap the mic when you are ready' :
+          _state == CallState.listening ? 'Listening until you finish speaking' :
           _state == CallState.thinking ? '${_c.name} is thinking...' :
           _state == CallState.contactSpeaking ? '${_c.name} is speaking...' : '',
           style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.3))),

@@ -13,12 +13,22 @@ class DatabaseService {
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       join(dbPath, 'ben.db'),
-      version: 3,
+      version: 4,
       onCreate: (db, version) async {
         await _createTables(db);
         await _insertDefaultContacts(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 4) {
+          for (final statement in [
+            "ALTER TABLE contacts ADD COLUMN language_code TEXT NOT NULL DEFAULT 'en-US'",
+            "ALTER TABLE contacts ADD COLUMN voice_style TEXT NOT NULL DEFAULT 'warm'",
+            "ALTER TABLE contacts ADD COLUMN voice_profile_path TEXT",
+            "ALTER TABLE contacts ADD COLUMN voice_consent INTEGER NOT NULL DEFAULT 0",
+          ]) {
+            try { await db.execute(statement); } catch (_) {}
+          }
+        }
         await _createTables(db);
         await _insertDefaultContacts(db);
       },
@@ -35,6 +45,10 @@ class DatabaseService {
         avatar_color TEXT NOT NULL,
         photo_path TEXT,
         system_prompt TEXT NOT NULL,
+        language_code TEXT NOT NULL DEFAULT 'en-US',
+        voice_style TEXT NOT NULL DEFAULT 'warm',
+        voice_profile_path TEXT,
+        voice_consent INTEGER NOT NULL DEFAULT 0,
         last_called_at TEXT
       )
     ''');

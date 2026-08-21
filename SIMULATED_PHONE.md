@@ -17,3 +17,14 @@ The system intentionally does not require a real phone number, carrier account, 
 ## Important runtime behavior
 
 The scheduler works while the app process is active, and local notifications provide a reminder when the operating system suspends the app. For a production mobile release, notification-tap routing should be added so tapping a reminder notification opens the simulated incoming-call screen even after the app was fully terminated.
+
+
+## Natural multilingual calling
+
+Each friend can have a preferred conversation language: English, French, Spanish, Mandarin Chinese, German, or Kiswahili. Ben configures speech recognition and text-to-speech for that language and instructs the conversation model to reply in the same language unless the user switches.
+
+The call state machine is deliberately turn-based. The friend speaks first, then the microphone opens. Partial recognition is shown as a live transcript, but Ben does not send text to the model until speech recognition has closed after the user finishes speaking or taps stop. Only then does the app enter thinking state and generate a reply.
+
+## Voice profile safety
+
+Ben supports distinct built-in voice characters and stores consent metadata for future authorized voice profiles. A real person’s voice must not be cloned from a recording without that person’s explicit permission. Memorial or friend-inspired profiles must disclose that the voice is AI-generated and must never be presented as the actual person.

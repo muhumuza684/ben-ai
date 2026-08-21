@@ -21,6 +21,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _editContact(Contact contact) {
     final nameCtrl = TextEditingController(text: contact.name);
+    var languageCode = contact.languageCode;
+    var voiceStyle = contact.voiceStyle;
+    var voiceConsent = contact.voiceConsent;
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1A1A1A),
@@ -89,6 +92,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Text(contact.specialty,
                 style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14)),
             ),
+            const SizedBox(height: 18),
+            Text('Conversation language', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.5))),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: languageCode,
+              dropdownColor: const Color(0xFF242424),
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.07),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'en-US', child: Text('English')),
+                DropdownMenuItem(value: 'fr-FR', child: Text('Français')),
+                DropdownMenuItem(value: 'es-ES', child: Text('Español')),
+                DropdownMenuItem(value: 'zh-CN', child: Text('中文')),
+                DropdownMenuItem(value: 'de-DE', child: Text('Deutsch')),
+                DropdownMenuItem(value: 'sw-KE', child: Text('Kiswahili')),
+              ],
+              onChanged: (value) { if (value != null) languageCode = value; },
+            ),
+            const SizedBox(height: 16),
+            Text('Voice character', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.5))),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: voiceStyle,
+              dropdownColor: const Color(0xFF242424),
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.07),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'warm', child: Text('Warm and natural')),
+                DropdownMenuItem(value: 'bright', child: Text('Bright and playful')),
+                DropdownMenuItem(value: 'deep', child: Text('Calm and deep')),
+              ],
+              onChanged: (value) { if (value != null) voiceStyle = value; },
+            ),
+            const SizedBox(height: 8),
+            CheckboxListTile(
+              value: voiceConsent,
+              onChanged: (value) { voiceConsent = value ?? false; },
+              contentPadding: EdgeInsets.zero,
+              activeColor: const Color(0xFF4ADE80),
+              title: const Text('I have permission to use a custom voice recording', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              subtitle: const Text('Voice profiles require the speaker’s explicit consent.', style: TextStyle(color: Colors.white38, fontSize: 11)),
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -97,6 +151,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   final newName = nameCtrl.text.trim();
                   if (newName.isEmpty) return;
                   contact.name = newName;
+                  contact.languageCode = languageCode;
+                  contact.voiceStyle = voiceStyle;
+                  contact.voiceConsent = voiceConsent;
                   await DatabaseService.updateContact(contact);
                   setState(() {
                     final idx = _contacts.indexWhere((c) => c.id == contact.id);
