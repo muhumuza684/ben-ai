@@ -3,6 +3,7 @@ import '../models/contact.dart';
 import '../services/database_service.dart';
 import 'outgoing_screen.dart';
 import 'settings_screen.dart';
+import 'call_history_screen.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -195,7 +196,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
             child: GestureDetector(
               onTap: () {
                 setState(() => _tab = i);
-                if (i == 2) {
+                if (i == 1) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CallHistoryScreen()),
+                  );
+                } else if (i == 2) {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => SettingsScreen(contacts: _contacts)),

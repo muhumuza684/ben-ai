@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/contact.dart';
+import '../models/call_log.dart';
 import '../services/database_service.dart';
 import 'call_screen.dart';
 
 class IncomingScreen extends StatefulWidget {
   final Contact contact;
-  const IncomingScreen({super.key, required this.contact});
+  final String? callReason;
+  const IncomingScreen({super.key, required this.contact, this.callReason});
 
   @override
   State<IncomingScreen> createState() => _IncomingScreenState();
@@ -16,25 +18,33 @@ class _IncomingScreenState extends State<IncomingScreen>
     with TickerProviderStateMixin {
   late AnimationController _ring1, _ring2;
   Timer? _missedTimer;
+  int? _callLogId;
 
   @override
   void initState() {
     super.initState();
     _ring1 = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat();
     _ring2 = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
+    _createCallLog();
     Future.delayed(const Duration(milliseconds: 600), () {
       if (mounted) _ring2.repeat();
     });
 
     // Auto dismiss after 30 seconds if not answered
     _missedTimer = Timer(const Duration(seconds: 30), () {
+      if (_callLogId != null) DatabaseService.updateCallLog(_callLogId!, status: 'missed');
       if (mounted) Navigator.pop(context);
     });
+  }
+
+  Future<void> _createCallLog() async {
+    _callLogId = await DatabaseService.saveCallLog(CallLog(contactId: widget.contact.id, direction: 'incoming', status: 'ringing', startedAt: DateTime.now(), note: widget.callReason));
   }
 
   void _accept() async {
     _missedTimer?.cancel();
     await DatabaseService.updateLastCalled(widget.contact.id);
+    if (_callLogId != null) await DatabaseService.updateCallLog(_callLogId!, status: 'answered');
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
@@ -46,6 +56,7 @@ class _IncomingScreenState extends State<IncomingScreen>
 
   void _decline() {
     _missedTimer?.cancel();
+    if (_callLogId != null) DatabaseService.updateCallLog(_callLogId!, status: 'declined');
     Navigator.pop(context);
   }
 
@@ -133,8 +144,12 @@ class _IncomingScreenState extends State<IncomingScreen>
                 Text(widget.contact.name,
                   style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w500, color: Colors.white, letterSpacing: -0.5)),
                 const SizedBox(height: 6),
-                Text('AI Friend · Calling...',
-                  style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.45))),
+                                Text('AI Friend · Calling...', style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.45))),
+                if (widget.callReason != null) ...[
+                  const SizedBox(height: 10),
+                  Padding(padding: const EdgeInsets.symmetric(horizontal: 36), child: Text('“${widget.callReason}”', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.38), fontStyle: FontStyle.italic))),
+                ],
+
                 const SizedBox(height: 12),
 
                 // Specialty badge

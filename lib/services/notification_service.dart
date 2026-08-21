@@ -2,6 +2,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_timezone/flutter_timezone.dart';
 import '../models/reminder.dart';
+import 'simulated_call_service.dart';
 
 class NotificationService {
   static final _plugin = FlutterLocalNotificationsPlugin();
@@ -10,7 +11,11 @@ class NotificationService {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings();
     await _plugin.initialize(
-      const InitializationSettings(android: android, iOS: ios),
+      InitializationSettings(android: android, iOS: ios),
+      onDidReceiveNotificationResponse: (response) {
+        final id = int.tryParse(response.payload ?? '');
+        if (id != null) SimulatedCallService.handleReminderTap(id);
+      },
     );
     await _plugin
         .resolvePlatformSpecificImplementation<
@@ -38,6 +43,7 @@ class NotificationService {
       reminder.task,
       scheduled,
       const NotificationDetails(android: androidDetails),
+      payload: reminder.id?.toString(),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,

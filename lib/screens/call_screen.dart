@@ -7,6 +7,7 @@ import '../services/groq_service.dart';
 import '../services/speech_service.dart';
 import '../services/database_service.dart';
 import '../services/notification_service.dart';
+import '../services/simulated_call_service.dart';
 import '../widgets/wave_bars.dart';
 import '../widgets/pulse_avatar.dart';
 
@@ -79,7 +80,10 @@ class _CallScreenState extends State<CallScreen> {
       if (mounted) {
         setState(() {
           _state = CallState.idle;
-          _statusText = 'Tap mic to talk';
+          _statusText = 'Listening for you...';
+          Future.delayed(const Duration(milliseconds: 250), () {
+            if (mounted && _state == CallState.idle) _startListening();
+          });
         });
       }
     });
@@ -128,8 +132,9 @@ class _CallScreenState extends State<CallScreen> {
       final response = results[1] as BenResponse;
       if (reminder != null) {
         final id = await DatabaseService.saveReminder(reminder, _c.id);
-        final saved = Reminder(id: id, task: reminder.task,
+        final saved = Reminder(id: id, contactId: _c.id, task: reminder.task,
           scheduledAt: reminder.scheduledAt, lastConversationSummary: summary);
+        SimulatedCallService.schedule(saved, _c);
         await NotificationService.scheduleReminderCall(saved);
         if (mounted) {
           setState(() => _pendingReminder = saved);

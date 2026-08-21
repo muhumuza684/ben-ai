@@ -4,6 +4,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'screens/contacts_screen.dart';
 import 'services/notification_service.dart';
 import 'services/database_service.dart';
+import 'services/simulated_call_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,6 +16,7 @@ void main() async {
   tz.initializeTimeZones();
   await NotificationService.init();
   await DatabaseService.init();
+  await SimulatedCallService.init();
   runApp(const BenApp());
 }
 
@@ -24,6 +26,7 @@ class BenApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: SimulatedCallService.navigatorKey,
       title: 'Ben',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

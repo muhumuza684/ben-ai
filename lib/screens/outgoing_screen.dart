@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/contact.dart';
+import '../models/call_log.dart';
 import '../services/database_service.dart';
 import 'call_screen.dart';
 
@@ -18,6 +19,7 @@ class _OutgoingScreenState extends State<OutgoingScreen>
   Timer? _pickupTimer;
   int _dots = 0;
   Timer? _dotsTimer;
+  int? _callLogId;
 
   @override
   void initState() {
@@ -33,6 +35,7 @@ class _OutgoingScreenState extends State<OutgoingScreen>
       if (mounted) _ring3.forward(from: 0.66);
     });
 
+    _createCallLog();
     _dotsTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (mounted) setState(() => _dots = (_dots + 1) % 4);
     });
@@ -41,8 +44,13 @@ class _OutgoingScreenState extends State<OutgoingScreen>
     _pickupTimer = Timer(const Duration(seconds: 3), _pickUp);
   }
 
+  Future<void> _createCallLog() async {
+    _callLogId = await DatabaseService.saveCallLog(CallLog(contactId: widget.contact.id, direction: 'outgoing', status: 'ringing', startedAt: DateTime.now()));
+  }
+
   void _pickUp() async {
     await DatabaseService.updateLastCalled(widget.contact.id);
+    if (_callLogId != null) await DatabaseService.updateCallLog(_callLogId!, status: 'answered');
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
@@ -54,6 +62,7 @@ class _OutgoingScreenState extends State<OutgoingScreen>
 
   void _cancel() {
     _pickupTimer?.cancel();
+    if (_callLogId != null) DatabaseService.updateCallLog(_callLogId!, status: 'cancelled');
     Navigator.pop(context);
   }
 
